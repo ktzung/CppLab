@@ -350,7 +350,14 @@ window.CppRender = (function () {
   function renderScene(scene, opts) {
     if (!scene) return `<div class="scene-empty">Chưa có mô phỏng cho bước này.</div>`;
     const options = opts || {};
-    let body = "";
+    const stage = !options.compact && window.CppStage && window.CppStage.on() && window.CppStage.canRender(scene.kind);
+    let body = stage ? window.CppStage.render(scene) : "";
+    if (body) {
+      return `<div class="scene scene-${esc(scene.kind || "unknown")} is-iso">
+        ${scene.title ? `<div class="scene-title">${esc(scene.title)}</div>` : ""}
+        <div class="scene-body">${body}</div>
+      </div>`;
+    }
     switch (scene.kind) {
       case "flow": body = renderFlow(scene); break;
       case "vars": body = renderVars(scene); break;

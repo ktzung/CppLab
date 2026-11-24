@@ -38,6 +38,7 @@
     book: `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h5.5A2.5 2.5 0 0 1 11 7v9a2.5 2.5 0 0 0-2.5-2H3zM17 4.5h-3.5A2.5 2.5 0 0 0 11 7v9a2.5 2.5 0 0 1 2.5-2H17z"/></svg>`,
     lab: `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 2v5.2L3.4 15a2 2 0 0 0 1.7 3h9.8a2 2 0 0 0 1.7-3L12 7.2V2M6 2h8M6.5 11h7"/></svg>`,
     tree: `<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="4" r="2"/><circle cx="5" cy="15" r="2"/><circle cx="15" cy="15" r="2"/><path d="M9 5.7 6 13M11 5.7l3 7.3"/></svg>`,
+    cube: `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.6 17 6.5v7L10 17.4 3 13.5v-7L10 2.6Z"/><path d="M10 10.1 17 6.5M10 10.1v7.3M10 10.1 3 6.5"/></svg>`,
     close: `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 4 12 12M16 4 4 16"/></svg>`
   };
   const icon = (name, cls) => `<span class="ui-icon${cls ? " " + cls : ""}">${ICON[name] || ""}</span>`;
@@ -567,10 +568,12 @@ int main() {
     const scene = stepScene(lesson, step);
     const file = lesson.file || `${lesson.id}.cpp`;
     const life = lesson.life || { title: "Một tình huống đời thường", text: "Mỗi khái niệm đều có một phiên bản quen thuộc ngoài đời." };
+    const isoOn = !!(window.CppStage && window.CppStage.on());
     return `<div class="stage-card" id="stageCard">
       <div class="stage-top">
         <div class="stage-title"><span class="live-dot"></span><span>CODE STAGE</span><span>${esc(file)} · ${codeLineCount(code)} dòng</span></div>
         <div class="stage-actions">
+          <button class="stage-icon-btn scene-mode-btn${isoOn ? " is-on" : ""}" type="button" data-action="toggle-scene3d" aria-pressed="${isoOn}" title="Bật / tắt sơ đồ isometric">${icon("cube")}<span>${isoOn ? "3D" : "2D"}</span></button>
           <button class="stage-icon-btn" type="button" data-action="copy-code" title="Copy code">${icon("copy")}<span>Copy</span></button>
           <button class="stage-icon-btn" type="button" data-action="fullscreen" title="Xem toàn màn hình">${icon("full")}<span>Toàn màn hình</span></button>
         </div>
@@ -586,7 +589,10 @@ int main() {
           <div class="code-scroll" id="codeScroll">${R.codeHTML(code, step.line || 1, step.mark || [])}</div>
         </div>
         <div class="scene-panel">
-          <div class="scene-panel-head"><span>BỘ NHỚ &amp; DỮ LIỆU</span><span id="sceneKind">${esc(scene.kind || "vars").toUpperCase()}</span></div>
+          <div class="scene-panel-head">
+            <span>BỘ NHỚ &amp; DỮ LIỆU</span>
+            <span class="scene-head-right"><span id="sceneKind">${esc(scene.kind || "vars").toUpperCase()}</span><button class="scene-zoom" type="button" data-action="zoom-scene" title="Phóng to sơ đồ" aria-label="Phóng to sơ đồ">${icon("full")}</button></span>
+          </div>
           <div class="scene-wrap" id="sceneWrap">${R.renderScene(scene)}</div>
         </div>
       </div>
@@ -1325,6 +1331,28 @@ cout << *p;`)}</pre></div>
     if (action === "cycle-speed") { cycleSpeed(); return; }
     if (action === "copy-code") { copyCode(); return; }
     if (action === "fullscreen") { toggleFullscreen(); return; }
+    if (action === "toggle-scene3d") {
+      if (!window.CppStage) return;
+      const next = window.CppStage.toggle();
+      el.classList.toggle("is-on", next);
+      el.setAttribute("aria-pressed", String(next));
+      const label = el.querySelector("span:not(.ui-icon)");
+      if (label) label.textContent = next ? "3D" : "2D";
+      const lesson = LESSONS[state.lesson.id];
+      if (lesson) applyStep(lesson, state.lesson.step);
+      toast(next ? "Sơ đồ isometric đã bật" : "Đã chuyển về sơ đồ phẳng");
+      return;
+    }
+    if (action === "zoom-scene") {
+      const panel = document.querySelector(".scene-panel");
+      if (!panel) return;
+      if (!document.fullscreenElement) {
+        if (panel.requestFullscreen) panel.requestFullscreen().catch(() => {});
+      } else if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      return;
+    }
     if (action === "answer-practice") { answerPractice(el.dataset.option); return; }
     if (action === "lab-mode") {
       state.lab.mode = el.dataset.mode;
@@ -1351,7 +1379,7 @@ cout << *p;`)}</pre></div>
       const actionEl = event.target.closest("[data-action]");
       if (!actionEl) return;
       const action = actionEl.dataset.action;
-      if (action && ["start-track", "select-track", "toggle-play", "replay", "prev-step", "next-step", "cycle-speed", "copy-code", "fullscreen", "answer-practice", "lab-mode", "lab-algo", "lab-play", "lab-step", "lab-reset", "lab-shuffle", "mem-left", "mem-right", "mem-inc", "mem-reset"].includes(action)) {
+      if (action && ["start-track", "select-track", "toggle-play", "replay", "prev-step", "next-step", "cycle-speed", "copy-code", "fullscreen", "toggle-scene3d", "zoom-scene", "answer-practice", "lab-mode", "lab-algo", "lab-play", "lab-step", "lab-reset", "lab-shuffle", "mem-left", "mem-right", "mem-inc", "mem-reset"].includes(action)) {
         event.preventDefault();
         handleAction(action, actionEl);
       }
