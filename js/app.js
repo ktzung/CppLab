@@ -604,7 +604,7 @@ int main() {
           <span class="legend-item"><i class="legend-swatch" style="--sw:var(--coral)"></i>Giá trị vừa đổi</span>
           <span class="legend-item"><i class="legend-swatch" style="--sw:var(--green)"></i>Đã xử lý</span>
         </div>
-        <span class="stage-hint">← → chuyển bước · Space phát · R phát lại</span>
+        <span class="stage-hint">← → bước · Space phát · R phát lại · chạm khối để ghim · kéo ngang để nghiêng</span>
       </div>
       <div class="stage-player">
         <div class="player-bar">

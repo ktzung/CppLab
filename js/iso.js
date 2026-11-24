@@ -3,9 +3,40 @@ window.CppStage = (function () {
   "use strict";
 
   const KEY = "cpplab-scene-3d";
+  const CAM_KEY = "cpplab-iso-cam";
+  const LAYER_KEY = "cpplab-iso-layers";
   const KINDS = new Set(["array", "list", "stack", "queue", "tree", "graph", "memory", "recursion", "complexity", "flow"]);
   const W = 540;
+  const Z_MIN = 0.9;
+  const Z_MAX = 2.4;
+  const YAW_MAX = 16;
   let seq = 0;
+  let enterSeq = 0;
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  function loadCam() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CAM_KEY) || "{}");
+      return { zoom: clamp(Number(raw.zoom) || 1, Z_MIN, Z_MAX), yaw: clamp(Number(raw.yaw) || 0, -YAW_MAX, YAW_MAX) };
+    } catch (err) { return { zoom: 1, yaw: 0 }; }
+  }
+  function saveCam(cam) {
+    try { localStorage.setItem(CAM_KEY, JSON.stringify(cam)); } catch (err) { /* ignore */ }
+  }
+  function loadLayers() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LAYER_KEY) || "{}");
+      return { addr: raw.addr !== false };
+    } catch (err) { return { addr: true }; }
+  }
+  function saveLayers(layers) {
+    try { localStorage.setItem(LAYER_KEY, JSON.stringify(layers)); } catch (err) { /* ignore */ }
+  }
+  const CAM = loadCam();
+  const LAYERS = loadLayers();
+  function tip(title, lines) {
+    return { title: String(title), lines: lines.filter((line) => line != null && line !== "").map(String) };
+  }
 
   function list(value) { return Array.isArray(value) ? value : []; }
   function num(value) {
@@ -82,7 +113,11 @@ window.CppStage = (function () {
     const top = base - h;
     const cls = ["iso-block", o.tone ? `is-${o.tone}` : "", o.cls || ""].filter(Boolean).join(" ");
     const hatch = o.hatch === false ? "" : ` fill="url(#${id}-h)"`;
-    let out = `<g class="${cls}">`;
+    const idx = enterSeq++;
+    const tipAttr = o.tip
+      ? ` tabindex="0" role="button" data-tip="${esc(JSON.stringify(o.tip))}" aria-label="${esc(`${o.tip.title}. ${o.tip.lines.join(". ")}`)}"`
+      : "";
+    let out = `<g class="${cls}" style="--i:${idx}"${tipAttr}>`;
     out += `<path class="iso-face-l" d="M${P(cx - hw, top)}L${P(cx, top + hd)}L${P(cx, base + hd)}L${P(cx - hw, base)}Z"/>`;
     out += `<path class="iso-face-r" d="M${P(cx, top + hd)}L${P(cx + hw, top)}L${P(cx + hw, base)}L${P(cx, base + hd)}Z"${hatch}/>`;
     out += `<path class="iso-face-t" d="M${P(cx, top - hd)}L${P(cx + hw, top)}L${P(cx, top + hd)}L${P(cx - hw, top)}Z"/>`;
@@ -175,7 +210,14 @@ window.CppStage = (function () {
         cut: cw < 34 ? 3 : 4,
         lift: active.has(i) ? 6 : 0,
         tone,
-        cls: extra
+        cls: extra,
+        tip: tip(`${scene.label || "a"}[${i}]`, [
+          `giá trị: ${value}`,
+          active.has(i) ? "đang xét" : "",
+          sorted.has(i) ? "đã xếp xong" : "",
+          cmp.has(i) ? "đang so sánh" : "",
+          win.has(i) ? "trong cửa sổ trượt" : ""
+        ])
       });
     });
     const groups = {};
@@ -249,7 +291,13 @@ window.CppStage = (function () {
         cut: 4,
         addr: node.addr,
         lift: isActive ? 6 : 0,
-        tone
+        tone,
+        tip: tip(`nút ${i + 1}${node.id ? ` · ${node.id}` : ""}`, [
+          node.value != null ? `giá trị: ${node.value}` : "",
+          node.addr ? `địa chỉ: ${node.addr}` : "",
+          headId === node.id || String(i) === headId ? "đang là head" : "",
+          isActive ? "đang được trỏ tới" : ""
+        ])
       });
     });
     const headIndex = headId == null ? -1 : nodes.findIndex((node, i) => node.id === headId || String(i) === headId);
@@ -293,7 +341,12 @@ window.CppStage = (function () {
         cut: 12,
         lift: active.has(i) ? 6 : 0,
         tone: active.has(i) ? "active" : "",
-        cls: i === top ? "is-top" : ""
+        cls: i === top ? "is-top" : "",
+        tip: tip(`phần tử ${i + 1}`, [
+          `giá trị: ${value}`,
+          i === top ? "đỉnh ngăn xếp (top)" : "",
+          active.has(i) ? "vừa được xử lý" : ""
+        ])
       });
     });
     if (top >= 0 && top < n) {
@@ -348,7 +401,13 @@ window.CppStage = (function () {
         topSize: 18,
         cut: 5,
         lift: isActive ? 6 : 0,
-        tone
+        tone,
+        tip: tip(`vị trí ${i}`, [
+          `giá trị: ${value}`,
+          i === front ? "đầu hàng (front)" : "",
+          i === rear ? "cuối hàng (rear)" : "",
+          isActive ? "đang được lấy ra" : ""
+        ])
       });
     });
     [["front", front], ["rear", rear]].forEach((entry, k) => {
@@ -425,7 +484,13 @@ window.CppStage = (function () {
         topSize: String(label).length > 4 ? 13.5 : 17,
         cut: 8,
         tone: isActive ? "active" : isDone ? "done" : node.state === "muted" ? "muted" : "",
-        lift: isActive ? 4 : 0
+        lift: isActive ? 4 : 0,
+        tip: tip(`đỉnh ${label}`, [
+          String(node.id) !== String(label) ? `mã: ${node.id}` : "",
+          isActive ? "đang duyệt" : "",
+          isDone ? "đã duyệt xong" : "",
+          node.badge ? `nhãn: ${node.badge}` : ""
+        ])
       });
       if (node.badge) {
         inner += pill(node.x + 46, node.y - 20, node.badge, { tone: "ink", h: 19 });
@@ -473,7 +538,12 @@ window.CppStage = (function () {
           addr: item.addr,
           tone: item.active ? "active" : "",
           lift: item.active ? 5 : 0,
-          hatch: false
+          hatch: false,
+          tip: tip(item.name || "ô nhớ", [
+            item.value != null ? `giá trị: ${item.value}` : "",
+            item.addr ? `địa chỉ: ${item.addr}` : "",
+            item.active ? "đang được dùng" : ""
+          ])
         });
       });
     });
@@ -514,7 +584,12 @@ window.CppStage = (function () {
         size: n > 3 ? 11.5 : 12.5,
         cut: 32,
         tone: frame.active ? "active" : "",
-        lift: frame.active ? 5 : 0
+        lift: frame.active ? 5 : 0,
+        tip: tip(`${frame.fn} · #${i + 1}`, [
+          frame.note || "đang chờ",
+          frame.active ? "khung đang chạy" : "khung đang chờ",
+          i === n - 1 ? "lời gọi mới nhất" : ""
+        ])
       });
       body += pill(270 + w / 2 + 34, y - h / 2 - (frame.active ? 5 : 0), `#${i + 1}`, { tone: "ink", h: 19 });
     });
@@ -566,7 +641,12 @@ window.CppStage = (function () {
         topText: row.label,
         topSize: label.length > 6 ? 13.5 : label.length > 4 ? 15 : 17,
         cut: 14,
-        tone: isActive ? "active" : ""
+        tone: isActive ? "active" : "",
+        tip: tip(String(row.label || "độ phức tạp"), [
+          row.value ? `chi phí: ${row.value}` : "",
+          row.text || "",
+          isActive ? "đang được chọn" : ""
+        ])
       });
       body += `<text class="iso-index" x="${F(x)}" y="${F(baseY + 37)}" text-anchor="middle" font-size="12">${esc(cut(row.value, 12))}</text>`;
       const noteY = top - 32;
@@ -629,7 +709,11 @@ window.CppStage = (function () {
         value: item.sub ? cut(item.sub, 9) : null,
         size: 11,
         tone: isActive ? "active" : isDone ? "done" : "",
-        lift: isActive ? 6 : 0
+        lift: isActive ? 6 : 0,
+        tip: tip(`bước ${i + 1}: ${label}`, [
+          item.sub || "",
+          isActive ? "đang chạy" : isDone ? "đã xong" : ""
+        ])
       });
     });
     const cap = captionPart(scene, frontR + depth + 50);
@@ -655,16 +739,244 @@ window.CppStage = (function () {
     const painter = PAINTERS[scene.kind];
     if (!painter) return "";
     const id = `cs${++seq}`;
+    enterSeq = 0;
     const art = painter(scene, id);
     if (!art) return "";
     const height = Math.max(240, Math.round(art.height));
     const label = scene.title || `Mô phỏng ${scene.kind}`;
-    return `<div class="cpp-iso">
-      <svg class="cpp-iso-svg" viewBox="0 0 ${W} ${height}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}">
+    const vbW = W / CAM.zoom;
+    const vbH = height / CAM.zoom;
+    const vbX = (W - vbW) / 2;
+    const vbY = (height - vbH) / 2;
+    const addrOn = LAYERS.addr;
+    return `<div class="cpp-iso is-fresh${addrOn ? "" : " hide-addr"}" data-h="${height}" style="--yaw:${CAM.yaw}deg">
+      <div class="iso-tools" role="group" aria-label="Camera sân khấu">
+        <button type="button" data-iso-cam="in" title="Phóng to" aria-label="Phóng to">+</button>
+        <button type="button" data-iso-cam="out" title="Thu nhỏ" aria-label="Thu nhỏ">−</button>
+        <button type="button" data-iso-cam="fit" title="Vừa khung (nhấp đúp)" aria-label="Thu vừa khung">⤢</button>
+        <button type="button" data-iso-cam="addr" class="${addrOn ? "is-on" : ""}" aria-pressed="${addrOn}" title="Ẩn/hiện địa chỉ và chỉ số" aria-label="Ẩn hoặc hiện địa chỉ và chỉ số">ĐC</button>
+      </div>
+      <div class="iso-callout" role="tooltip" hidden></div>
+      <svg class="cpp-iso-svg" viewBox="${F(vbX)} ${F(vbY)} ${F(vbW)} ${F(vbH)}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${esc(label)}">
         ${defs(id)}${art.body}
       </svg>
     </div>`;
   }
+
+  /* ---------- camera, chú thích và tương tác ---------- */
+  let drag = null;
+  let hovered = null;
+  let pinned = null;
+
+  function hostFrom(node) {
+    return node && node.closest ? node.closest(".cpp-iso") : null;
+  }
+  function blockFrom(node) {
+    const el = node && node.closest ? node.closest(".iso-block") : null;
+    return el && el.closest(".cpp-iso") ? el : null;
+  }
+  function applyCam(host) {
+    const svg = host.querySelector(".cpp-iso-svg");
+    if (!svg) return;
+    const h = Number(host.dataset.h) || 300;
+    const vw = W / CAM.zoom;
+    const vh = h / CAM.zoom;
+    svg.setAttribute("viewBox", `${F((W - vw) / 2)} ${F((h - vh) / 2)} ${F(vw)} ${F(vh)}`);
+    host.style.setProperty("--yaw", `${CAM.yaw}deg`);
+  }
+  function zoomBy(host, factor) {
+    CAM.zoom = clamp(Number((CAM.zoom * factor).toFixed(3)), Z_MIN, Z_MAX);
+    applyCam(host);
+    saveCam(CAM);
+  }
+  function resetCam(host) {
+    CAM.zoom = 1;
+    CAM.yaw = 0;
+    applyCam(host);
+    saveCam(CAM);
+  }
+  function toggleAddr() {
+    LAYERS.addr = !LAYERS.addr;
+    saveLayers(LAYERS);
+    document.querySelectorAll(".cpp-iso").forEach((el) => el.classList.toggle("hide-addr", !LAYERS.addr));
+    document.querySelectorAll('[data-iso-cam="addr"]').forEach((btn) => {
+      btn.classList.toggle("is-on", LAYERS.addr);
+      btn.setAttribute("aria-pressed", String(LAYERS.addr));
+    });
+  }
+  function readTip(blockEl) {
+    try { return JSON.parse(blockEl.getAttribute("data-tip") || "null"); } catch (err) { return null; }
+  }
+  function hideCallout(host) {
+    const callout = host && host.querySelector(".iso-callout");
+    if (!callout) return;
+    callout.hidden = true;
+    callout.textContent = "";
+  }
+  function placeCallout(host, blockEl) {
+    const callout = host.querySelector(".iso-callout");
+    const data = readTip(blockEl);
+    if (!callout || !data) return;
+    callout.textContent = "";
+    const head = document.createElement("b");
+    head.textContent = data.title;
+    callout.appendChild(head);
+    (data.lines || []).forEach((line) => {
+      const row = document.createElement("span");
+      row.textContent = line;
+      callout.appendChild(row);
+    });
+    const foot = document.createElement("i");
+    foot.textContent = pinned === blockEl ? "Esc để bỏ ghim" : "Nhấp để ghim chú thích";
+    callout.appendChild(foot);
+    callout.hidden = false;
+    const hr = host.getBoundingClientRect();
+    const br = blockEl.getBoundingClientRect();
+    const cw = callout.offsetWidth;
+    const ch = callout.offsetHeight;
+    let left = br.left - hr.left + br.width / 2 - cw / 2;
+    let top = br.top - hr.top - ch - 10;
+    if (top < 4) top = br.bottom - hr.top + 10;
+    left = clamp(left, 6, Math.max(6, hr.width - cw - 6));
+    top = clamp(top, 4, Math.max(4, hr.height - ch - 4));
+    callout.style.left = `${left}px`;
+    callout.style.top = `${top}px`;
+  }
+  function refresh(host) {
+    if (!host) return;
+    if (pinned && !pinned.isConnected) pinned = null;
+    if (hovered && !hovered.isConnected) hovered = null;
+    const target = hovered || pinned;
+    if (target && target.closest(".cpp-iso") === host) placeCallout(host, target);
+    else hideCallout(host);
+  }
+  function pinBlock(blockEl) {
+    const host = blockEl.closest(".cpp-iso");
+    if (pinned && !pinned.isConnected) pinned = null;
+    if (pinned === blockEl) {
+      pinned.classList.remove("is-pinned");
+      pinned = null;
+      hideCallout(host);
+      return;
+    }
+    if (pinned) pinned.classList.remove("is-pinned");
+    pinned = blockEl;
+    pinned.classList.add("is-pinned");
+    hovered = null;
+    placeCallout(host, blockEl);
+  }
+  function clearPin() {
+    if (!pinned) return;
+    const host = pinned.closest(".cpp-iso");
+    pinned.classList.remove("is-pinned");
+    pinned = null;
+    refresh(host);
+  }
+
+  document.addEventListener("click", (event) => {
+    const tool = event.target.closest ? event.target.closest("[data-iso-cam]") : null;
+    if (tool) {
+      const host = tool.closest(".cpp-iso");
+      if (!host) return;
+      event.preventDefault();
+      const act = tool.dataset.isoCam;
+      if (act === "in") zoomBy(host, 1.18);
+      else if (act === "out") zoomBy(host, 1 / 1.18);
+      else if (act === "fit") resetCam(host);
+      else if (act === "addr") toggleAddr();
+      return;
+    }
+    const host = hostFrom(event.target);
+    if (!host || host.dataset.dragged === "1" || event.detail > 1) return;
+    const blockEl = blockFrom(event.target);
+    if (blockEl) { pinBlock(blockEl); return; }
+    if (pinned || hovered) {
+      if (pinned) pinned.classList.remove("is-pinned");
+      pinned = null;
+      hovered = null;
+      hideCallout(host);
+    }
+  });
+
+  document.addEventListener("pointerover", (event) => {
+    const blockEl = blockFrom(event.target);
+    if (!blockEl) return;
+    hovered = blockEl;
+    refresh(blockEl.closest(".cpp-iso"));
+  });
+  document.addEventListener("pointerout", (event) => {
+    const blockEl = blockFrom(event.target);
+    if (!blockEl) return;
+    if (event.relatedTarget && blockEl.contains(event.relatedTarget)) return;
+    if (hovered === blockEl) hovered = null;
+    refresh(blockEl.closest(".cpp-iso"));
+  });
+  document.addEventListener("focusin", (event) => {
+    const blockEl = blockFrom(event.target);
+    if (!blockEl) return;
+    hovered = blockEl;
+    placeCallout(blockEl.closest(".cpp-iso"), blockEl);
+  });
+  document.addEventListener("focusout", (event) => {
+    const blockEl = blockFrom(event.target);
+    if (!blockEl) return;
+    if (hovered === blockEl) hovered = null;
+    refresh(blockEl.closest(".cpp-iso"));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && pinned) { clearPin(); return; }
+    const blockEl = blockFrom(event.target);
+    if (!blockEl) return;
+    if (event.key === "Enter" || event.code === "Space") {
+      event.preventDefault();
+      event.stopPropagation();
+      pinBlock(blockEl);
+    }
+  }, true);
+
+  document.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    if (event.target.closest && event.target.closest(".iso-tools")) return;
+    const host = hostFrom(event.target);
+    if (!host) return;
+    drag = { host, x: event.clientX, yaw: CAM.yaw, moved: false };
+  });
+  document.addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 4) return;
+    drag.moved = true;
+    CAM.yaw = Math.round(clamp(drag.yaw + dx * 0.14, -YAW_MAX, YAW_MAX) * 10) / 10;
+    drag.host.style.setProperty("--yaw", `${CAM.yaw}deg`);
+    drag.host.classList.add("is-yawing");
+  });
+  function endDrag() {
+    if (!drag) return;
+    const host = drag.host;
+    host.classList.remove("is-yawing");
+    if (drag.moved) {
+      host.dataset.dragged = "1";
+      setTimeout(() => { delete host.dataset.dragged; }, 320);
+      saveCam(CAM);
+    }
+    drag = null;
+  }
+  document.addEventListener("pointerup", endDrag);
+  document.addEventListener("pointercancel", endDrag);
+  document.addEventListener("dblclick", (event) => {
+    const host = hostFrom(event.target);
+    if (!host || (event.target.closest && event.target.closest(".iso-tools"))) return;
+    event.preventDefault();
+    resetCam(host);
+  });
+  document.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    const host = hostFrom(event.target);
+    if (!host) return;
+    event.preventDefault();
+    zoomBy(host, event.deltaY < 0 ? 1.12 : 1 / 1.12);
+  }, { passive: false });
 
   return { on, toggle, canRender, render, kinds: Array.from(KINDS) };
 })();
